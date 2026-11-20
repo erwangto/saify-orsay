@@ -1,0 +1,27 @@
+# Paramètres du rapprochement et de l'assistant (jamais en dur dans le code)
+version_regles = "1.0.0"
+date_arrete = "2026-09-25"
+dossier_donnees = "donnees"
+dossier_sorties = "sorties"
+
+[fichiers]
+interne = "positions_internes.csv"
+depositaire_A = "depositaire_A_20260925.xlsx"
+depositaire_B = "depositaire_B_20260925.txt"
+depositaire_C = "depositaire_C_20260925.xml"
+parametrage = "parametrage.xlsx"
+base = "orsay.db"
+
+[regles]
+sous_comptes_exclus = ["P3G"]
+
+# Mot-clé dans le libellé PMS -> conservateur
+[regles.libelles_conservateur]
+CACEIS = "A"
+EUROCLEAR = "B"
+BNP = "C"
+BP2S = "C"
+
+[assistant]
+modele = "claude-sonnet-5-5"
+max_tours = 3
