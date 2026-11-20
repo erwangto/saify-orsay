@@ -120,5 +120,6 @@ BESOIN 2 - QUESTIONS DES GÉRANTS
 | `app.py` | Interface Streamlit 2 onglets | vérif manuelle (lancement + démo) |
 
 ## Limites et suite
-- (à compléter au fil des étapes)
+- Étape 2 (loaders) : contrôles de date et de compteurs testés sur B ; pas de test de fichier A/C corrompu (structure Excel/XML cassée = exception non gérée).
+- pandas retiré : listes + Decimal suffisent (décision d'implémentation).
 - Passage en production : hébergement datacenter client / SecNumCloud, LLM local ; ordonnancement quotidien après réception des relevés ; double exécution (manuel + outil) pendant N jours, bascule quand 0 divergence.
