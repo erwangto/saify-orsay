@@ -45,18 +45,79 @@
 - Pièges qui doivent tomber juste : KERING (2 sous-comptes), TOTALENERGIES, HERMES (2 sous-comptes + 2 lots), OAT 2039 (PMS "BNP" et "BP2S"), RTE (annulation), SANOFI (ligne sans sous-compte exclue).
 - Environnement : `.env` indique une expiration de la clé au 08/11/2026 (à vérifier). L'énoncé dit le dépôt git initialisé, mais aucun `.git` trouvé.
 
-**Hypothèses / questions ouvertes**
-- (à compléter après la ronde 1)
+**Hypothèses (non tranchées en cadrage, prises par défaut)**
+- H1 Normalisation ISIN : espaces retirés + majuscules. Pas de contrôle de clé ISIN (les ISIN fictifs pourraient échouer).
+- H2 Conservateur côté PMS : reconnu par mot-clé dans le libellé (CACEIS -> A, EUROCLEAR -> B, BNP ou BP2S -> C), insensible à la casse. Libellé non reconnu = ligne rejetée.
+- H3 Quantités comparées en `Decimal` (pas de float) pour respecter la tolérance zéro sans erreur d'arrondi.
+- H4 Lots du conservateur C additionnés par (compte, ISIN) ; seules les lignes `ACTION=C` comptent, les `S` vont en « écartées ».
+- H5 Contrôles fichiers : date d'arrêté = date attendue (config) pour A (titre), B (en-tête), C (DateArrete), CSV (colonne) ; trailer B = nb de lignes D ; NbItems C = nb d'Item (annulations comprises).
+- H6 Paramètres (date d'arrêté, chemins, version des règles, taille max de boucle agent, modèle LLM) dans `config.toml`.
+- H7 Lecture de `orsay.db` toujours en SQLite read-only (`mode=ro`), pour le rapprochement (info) comme pour l'assistant.
+- H8 Opération candidate d'un QTE : mouvement `EN_ATTENTE` du même fonds et ISIN dans la base (info seulement).
+- H9 Assistant : modèle Claude récent via l'API fournie (`ANTHROPIC_API_KEY` lu depuis `.env`), boucle bornée à 3 tours. Si la clé est invalide/expirée, l'onglet affiche l'erreur ; les outils restent testés sans LLM.
+- H10 Python géré avec uv ; `requires-python >= 3.11` (le poste annonce 3.12).
+- H11 Hébergement cible en production : datacenter du client ou SecNumCloud, LLM local ou hébergé SecNumCloud ; l'API Anthropic publique n'est utilisée que pour la démo sur données fictives.
 
 ## Décisions
 | Étape | Choix | Raison | Alternative écartée |
 |---|---|---|---|
+| Cadrage | Besoin 1 d'abord, de bout en bout ; besoin 2 ensuite si le temps le permet, sinon décrit en architecture | Priorisation évaluée ; le besoin 1 est prouvable par tests | Faire les deux à moitié |
+| Cadrage | Python + pandas + pytest + Streamlit | Un seul langage, lancement en une commande, démo simple | FastAPI + React (trop long en 1 h) |
+| Cadrage | Terme unique **Fonds**, clé = libellé de la transco (`ORSAY PATRIMOINE`) | 3 noms pour un concept (fonds / entite / portefeuille) | Codes PAT/OBL/ACT de la base (source non de référence) |
+| Cadrage | Écart expliqué par une opération en attente = suspens QTE conservé + opération candidate affichée pour info | Tolérance zéro, l'humain clôt ; la base sert à s'informer | Justifier automatiquement l'écart |
+| Cadrage | DEP rapproché sur (Fonds, ISIN) ; un seul suspens même si la quantité diffère aussi (mention affichée) | Règle « un seul suspens » | DEP + QTE |
+| Cadrage | Fichier incohérent (date, compteur) bloqué avec message ; ligne inconnue (compte, libellé) rejetée avec motif | Ne pas fabriquer de faux suspens, rien d'écarté en silence | Tout bloquer / tout ignorer |
+| Cadrage | Lignes exclues par règle (P3G, sans sous-compte, annulation) affichées avec le motif | Traçabilité RCCI | Exclusion silencieuse |
+| Cadrage | Export Excel (suspens, écartées/rejetées, contrôles) + texte récapitulatif à copier, pas d'envoi auto ; journal d'audit JSON par exécution | Point de situation sans ressaisie, envoi = acte humain, principe d'audit | Envoi d'email automatique |
+| Cadrage | Ordre : besoin 1 testé et commité, puis besoin 2 ; sur « stop besoin 2 », il bascule en architecture | Sécuriser le livrable fiable | Paralléliser |
+| Cadrage | Assistant = LLM qui choisit parmi des **outils prédéfinis** (fonctions Python testées, SQL lecture seule) ; hors outils -> « je ne sais pas » | Aucun chiffre calculé par le LLM, source connue, lecture seule par construction | Text-to-SQL libre |
+| Cadrage | Réponse = tableau de l'outil + phrase LLM (pydantic) + source ; garde-fou : chaque nombre de la phrase doit figurer dans le résultat, sinon tableau seul + avertissement | « Un chiffre inventé = incident » | Afficher le texte LLM tel quel |
+| Cadrage | Assistant basé sur `orsay.db` (positions, cours à la date de config) ; obligations/BTF = nominal x cours / 100, actions = quantité x cours | Le client veut des réponses « tirées de notre base » | Utiliser le CSV du rapprochement |
+| Cadrage | ISIN inconnu du référentiel : ABS_DEP conservé + mention « ISIN absent du référentiel » | Info utile, typologie inchangée | Nouveau type de suspens |
+| Cadrage | Streamlit 2 onglets (Rapprochement, Questions), bouton « fichiers d'exemple » | Démo directe | Plusieurs pages / CLI |
+| Cadrage | Aucun statut « traité » ni modification : l'outil constate et exporte | Pas d'action engageante, périmètre minimal | Suivi des suspens (en « suite ») |
 
 ## Architecture
-(à compléter)
+Légende : [D] code déterministe, [LLM] modèle de langage, [H] humain
+
+```
+BESOIN 1 - RAPPROCHEMENT
+[H] dépose CSV PMS + A.xlsx + B.txt + C.xml + parametrage.xlsx
+        |
+[D] loaders : lecture + contrôles fichier (date, compteurs)
+        |      -> lignes écartées (P3G, sans sous-compte, annulation) + rejetées (inconnues)
+[D] normalisation : (Fonds, ISIN, Conservateur, Quantité Decimal), somme sous-comptes / lots
+        |
+[D] reconcile : comparaison exacte -> QTE / ABS_DEP / ABS_INT / DEP (+ action du paramétrage)
+        |      <- orsay.db en lecture seule : opération en attente, ISIN inconnu (info)
+[D] report : export Excel, texte récap, journal d'audit JSON
+        |
+[H] lit, traite les suspens, envoie le point de situation lui-même
+
+BESOIN 2 - QUESTIONS DES GÉRANTS
+[H] question en français
+        |
+[LLM] choisit un outil + paramètres (boucle bornée, sortie pydantic)
+        |
+[D] outil : requête SQL figée sur orsay.db (lecture seule) -> tableau + source
+        |
+[LLM] phrase de synthèse (pydantic)
+        |
+[D] garde-fou : nombres de la phrase présents dans le tableau ? sinon tableau seul + avertissement
+        |
+[H] lit réponse + tableau + source
+```
 
 | Fichier | Rôle | Test qui le vérifie |
 |---|---|---|
+| `config.toml` | Date d'arrêté, chemins, version des règles, modèle, max tours | utilisé par tous les tests |
+| `reco/loaders.py` | Lecture et contrôle des 5 fichiers, lignes écartées/rejetées | `tests/test_loaders.py` |
+| `reco/reconcile.py` | Agrégation, comparaison, typage des suspens, enrichissement info | `tests/test_reconcile.py` (les 7 suspens attendus + pièges) |
+| `reco/report.py` | Excel, texte récap, journal d'audit | `tests/test_report.py` |
+| `assistant/tools.py` | Outils SQL lecture seule (encours, échéances, concentration, non dénoués, mouvements d'un titre) | `tests/test_tools.py` |
+| `assistant/agent.py` | Appel LLM, boucle bornée, schémas pydantic, garde-fou nombres | `tests/test_agent.py` (garde-fou et routage avec LLM simulé) |
+| `app.py` | Interface Streamlit 2 onglets | vérif manuelle (lancement + démo) |
 
 ## Limites et suite
-(à compléter)
+- (à compléter au fil des étapes)
+- Passage en production : hébergement datacenter client / SecNumCloud, LLM local ; ordonnancement quotidien après réception des relevés ; double exécution (manuel + outil) pendant N jours, bascule quand 0 divergence.
