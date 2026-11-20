@@ -29,7 +29,7 @@ st.title(f"Orsay Gestion : middle office, arrêté du {CFG['date_arrete']}")
 tab_reco, tab_questions = st.tabs(["Rapprochement", "Questions"])
 
 
-def run_reconciliation(folder: Path) -> None:
+def run_reconciliation(folder: Path, source: str) -> None:
     param, results = load_all(folder, CFG)
     suspens = reconcile(results, param)
     enrich(suspens, DATA / CFG["fichiers"]["base"])
@@ -37,21 +37,28 @@ def run_reconciliation(folder: Path) -> None:
     inputs = [folder / CFG["fichiers"][k] for k in SLOTS]
     audit = write_audit(OUT / f"audit_{stamp}.json", suspens, results, CFG, inputs)
     excel = write_excel(OUT / f"rapprochement_{stamp}.xlsx", suspens, results)
-    st.session_state["reco"] = {"suspens": suspens, "results": results, "excel": excel, "audit": audit}
+    st.session_state["reco"] = {"suspens": suspens, "results": results, "excel": excel, "audit": audit, "source": source}
 
+
+# Au premier affichage, les fichiers du dossier donnees/ sont rapprochés directement
+if "reco" not in st.session_state:
+    run_reconciliation(DATA, "fichiers du dossier donnees/")
 
 with tab_reco:
-    uploads = {k: st.file_uploader(label, key=k) for k, label in SLOTS.items()}
-    c1, c2 = st.columns(2)
-    if c1.button("Lancer avec les fichiers déposés", disabled=not all(uploads.values())):
-        tmp = Path(tempfile.mkdtemp())
-        for k, f in uploads.items():
-            (tmp / CFG["fichiers"][k]).write_bytes(f.getvalue())
-        run_reconciliation(tmp)
-    if c2.button("Lancer avec les fichiers d'exemple"):
-        run_reconciliation(DATA)
+    with st.expander("Déposer d'autres fichiers"):
+        uploads = {k: st.file_uploader(label, key=k) for k, label in SLOTS.items()}
+        c1, c2 = st.columns(2)
+        if c1.button("Lancer avec les fichiers déposés", disabled=not all(uploads.values())):
+            tmp = Path(tempfile.mkdtemp())
+            for k, f in uploads.items():
+                (tmp / CFG["fichiers"][k]).write_bytes(f.getvalue())
+            run_reconciliation(tmp, "fichiers déposés")
+        if c2.button("Revenir aux fichiers d'exemple"):
+            run_reconciliation(DATA, "fichiers du dossier donnees/")
 
     reco = st.session_state.get("reco")
+    if reco:
+        st.caption(f"Source : {reco['source']}")
     if reco:
         suspens, results = reco["suspens"], reco["results"]
         bloques = [r.fichier for r in results if r.bloque]

@@ -12,7 +12,7 @@ uv run streamlit run app.py
 ```
 
 Puis ouvrir http://localhost:8501.
-- Onglet **Rapprochement** : déposer les 5 fichiers, ou cliquer « Lancer avec les fichiers d'exemple » (dossier `donnees/`).
+- Onglet **Rapprochement** : les fichiers du dossier `donnees/` sont rapprochés dès l'ouverture. Pour d'autres fichiers : section « Déposer d'autres fichiers ».
 - Onglet **Questions** : nécessite un fichier `.env` à la racine avec `ANTHROPIC_API_KEY` (non versionné). Sans clé valide, l'onglet affiche l'erreur ; le rapprochement n'en dépend pas.
 
 Sorties (Excel et journal d'audit JSON) : dossier `sorties/` (non versionné).
