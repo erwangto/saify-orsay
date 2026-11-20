@@ -78,6 +78,7 @@
 | Cadrage | Agent à outils plutôt que RAG pour le besoin 2 | Données structurées (SQL) et questions de calcul (sommes, valorisation) : un RAG ferait calculer le LLM sur des extraits partiels | RAG (pertinent plus tard pour des documents : prospectus, procédures) |
 | Étape 6 | Workflow à 2 appels fixes (routage puis synthèse, `messages.parse` + pydantic) au lieu d'une boucle d'agent | Le choix d'outil tient en un appel : plus simple, borné par construction, testable avec un LLM simulé | Boucle tool-use bornée à 3 tours |
 | Étape 6 | Modèle `claude-opus-5-5`, effort `low` | Modèle courant recommandé ; tâche simple (routage, une phrase) | Sonnet (choix initial non justifié) |
+| Étape 6 bis | Repli serveur `fallbacks="default"` sur refus du modèle, modèle de repli affiché à l'utilisateur | Recommandé par Anthropic ; routage par catégorie de refus sans liste de modèles à maintenir | Repli codé côté client / pas de repli |
 | Cadrage | Aucun statut « traité » ni modification : l'outil constate et exporte | Pas d'action engageante, périmètre minimal | Suivi des suspens (en « suite ») |
 
 ## Architecture
@@ -126,6 +127,6 @@ BESOIN 2 - QUESTIONS DES GÉRANTS
 - Étape 3 (reconcile) : les 7 suspens attendus sont trouvés par test. Appariement DEP au premier venu si plusieurs conservateurs candidats (cas absent des données). Conservateur bloqué : ses titres ne sont pas rapprochés et ne créent pas de faux ABS_INT ailleurs.
 - Étape 4 (report + onglet Rapprochement) : export Excel/audit/récap testés ; interface vérifiée en navigateur (7 suspens affichés, 0 erreur). Pas de test automatisé de l'interface. Le dépôt de fichiers personnalisés n'a pas été testé dans le navigateur.
 - Étape 5 (outils) : 3 outils sur 5 (concentration émetteur et origine d'un suspens en suite). Montants en float SQL arrondis à 2 décimales (acceptable pour de l'information, pas pour de la comptabilité). Valorisation pied de coupon, sans intérêts courus.
-- Étape 6 (agent) : garde-fou testé avec LLM simulé (nombre inventé rejeté) ; essai réel OK (encours OBL 724836.0, phrase acceptée). Limites : le garde-fou accepte les petits nombres présents dans les dates (ex. 25) ; pas de repli automatique en cas de refus du modèle (erreur affichée) ; l'API publique sert à la démo seulement (H11).
+- Étape 6 (agent) : garde-fou testé avec LLM simulé (nombre inventé rejeté) ; essai réel OK (encours OBL 724836.0, phrase acceptée). Limites : le garde-fou accepte les petits nombres présents dans les dates (ex. 25) ; repli automatique côté serveur en cas de refus (`fallbacks="default"`, beta `server-side-fallback-2026-07-01`) : requête acceptée par l'API en essai réel, mais aucun refus réel n'a pu être provoqué, le chemin de repli n'est testé qu'avec un client simulé ; un refus de toute la chaîne s'affiche en erreur ; l'API publique sert à la démo seulement (H11).
 - pandas retiré : listes + Decimal suffisent (décision d'implémentation).
 - Passage en production : hébergement datacenter client / SecNumCloud, LLM local ; ordonnancement quotidien après réception des relevés ; double exécution (manuel + outil) pendant N jours, bascule quand 0 divergence.

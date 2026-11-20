@@ -57,16 +57,23 @@ class ClaudeLLM:
 
         self.client = anthropic.Anthropic()  # lit ANTHROPIC_API_KEY dans l'environnement
         self.model = model
+        self.modeles_servis: list[str] = []  # trace des modèles ayant réellement répondu
 
     def _parse(self, system: str, content: str, schema: type[BaseModel]) -> Any:
-        response = self.client.messages.parse(
+        # Repli côté serveur : si le modèle refuse, l'API relance la même requête sur le modèle
+        # recommandé par Anthropic pour cette catégorie de refus, dans le même appel
+        response = self.client.beta.messages.parse(
             model=self.model,
             max_tokens=2000,
             output_config={"effort": "low"},
             system=system,
             messages=[{"role": "user", "content": content}],
             output_format=schema,
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
         )
+        self.modeles_servis.append(response.model)
+        # Un refus en fin de chaîne signifie que le repli a lui aussi refusé
         if response.stop_reason == "refusal" or response.parsed_output is None:
             raise RuntimeError(f"Réponse LLM inexploitable ({response.stop_reason})")
         return response.parsed_output

@@ -99,10 +99,14 @@ with tab_questions:
     if st.button("Demander") and question:
         load_dotenv(ROOT / ".env")
         try:
-            rep = answer(question, ClaudeLLM(CFG["assistant"]["modele"]), DATA / CFG["fichiers"]["base"], CFG["date_arrete"])
-        except Exception as exc:  # clé absente/expirée, réseau, refus : on l'affiche sans planter
+            llm = ClaudeLLM(CFG["assistant"]["modele"])
+            rep = answer(question, llm, DATA / CFG["fichiers"]["base"], CFG["date_arrete"])
+        except Exception as exc:  # clé absente/expirée, réseau, refus de toute la chaîne : on l'affiche sans planter
             st.error(f"Assistant indisponible : {exc}")
         else:
+            replis = sorted(set(llm.modeles_servis) - {llm.model})
+            if replis:
+                st.info(f"Le modèle principal a refusé ; réponse obtenue par repli sur : {', '.join(replis)}")
             if rep.phrase:
                 st.success(rep.phrase)
             if rep.avertissement:

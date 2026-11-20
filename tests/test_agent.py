@@ -53,3 +53,45 @@ def test_echeances_avec_date_acceptee():
     rep = answer("Quelles échéances sous 90 jours ?", llm, DB, DATE)
     assert rep.avertissement is None
     assert check_numbers("le 2026-12-18", rep.resultat) == {18}
+
+
+class _StubResponse:
+    def __init__(self, stop_reason: str, parsed: Any, model: str) -> None:
+        self.stop_reason, self.parsed_output, self.model = stop_reason, parsed, model
+
+
+class _StubClient:
+    """Imite client.beta.messages.parse et garde les arguments reçus."""
+
+    def __init__(self, response: _StubResponse) -> None:
+        self.response, self.kwargs = response, {}
+        self.beta = self
+        self.messages = self
+
+    def parse(self, **kwargs: Any) -> _StubResponse:
+        self.kwargs = kwargs
+        return self.response
+
+
+def _llm_with(response: _StubResponse):
+    from assistant.agent import ClaudeLLM
+
+    llm = ClaudeLLM.__new__(ClaudeLLM)  # sans créer de vrai client
+    llm.client, llm.model, llm.modeles_servis = _StubClient(response), "claude-opus-5-5", []
+    return llm
+
+
+def test_repli_demande_et_modele_servi_trace():
+    llm = _llm_with(_StubResponse("end_turn", ChoixOutil(outil="aucun"), "claude-opus-4-8"))
+    assert llm.route("question").outil == "aucun"
+    assert llm.client.kwargs["fallbacks"] == "default"
+    assert llm.client.kwargs["betas"] == ["server-side-fallback-2026-07-01"]
+    assert llm.modeles_servis == ["claude-opus-4-8"]
+
+
+def test_refus_de_toute_la_chaine_leve_une_erreur():
+    import pytest
+
+    llm = _llm_with(_StubResponse("refusal", None, "claude-opus-4-8"))
+    with pytest.raises(RuntimeError, match="refusal"):
+        llm.route("question")
