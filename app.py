@@ -5,7 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 
+from assistant.agent import ClaudeLLM, answer
 from reco.config import ROOT, load_config
 from reco.loaders import load_all
 from reco.reconcile import enrich, reconcile
@@ -69,12 +71,12 @@ with tab_reco:
             if (not fonds or s.fonds in fonds)
             and (not cons or {s.conservateur_interne, s.conservateur_depositaire} & set(cons))
         ]
-        st.dataframe(suspens_rows(shown), use_container_width=True, hide_index=True)
+        st.dataframe(suspens_rows(shown), width="stretch", hide_index=True)
 
         with st.expander("Lignes hors rapprochement (écartées par règle ou rejetées)"):
-            st.dataframe(hors_rapprochement_rows(results), use_container_width=True, hide_index=True)
+            st.dataframe(hors_rapprochement_rows(results), width="stretch", hide_index=True)
         with st.expander("Contrôles des fichiers"):
-            st.dataframe(controle_rows(results), use_container_width=True, hide_index=True)
+            st.dataframe(controle_rows(results), width="stretch", hide_index=True)
 
         st.subheader("Point de situation (à copier dans votre mail)")
         st.text_area("Récapitulatif", summary_text(suspens, results, CFG), height=300)
@@ -82,4 +84,25 @@ with tab_reco:
         st.caption(f"Journal d'audit enregistré : {reco['audit'].relative_to(ROOT)}")
 
 with tab_questions:
-    st.info("Assistant gérants : à venir.")
+    st.caption(
+        "Questions couvertes : encours valorisé d'un fonds, échéances à venir, opérations non dénouées. "
+        "Les chiffres viennent de requêtes SQL en lecture seule sur la base de gestion ; le LLM ne fait que choisir la requête et rédiger la phrase."
+    )
+    question = st.text_input("Votre question", placeholder="Combien vaut Orsay Obligations au cours de clôture ?")
+    if st.button("Demander") and question:
+        load_dotenv(ROOT / ".env")
+        try:
+            rep = answer(question, ClaudeLLM(CFG["assistant"]["modele"]), DATA / CFG["fichiers"]["base"], CFG["date_arrete"])
+        except Exception as exc:  # clé absente/expirée, réseau, refus : on l'affiche sans planter
+            st.error(f"Assistant indisponible : {exc}")
+        else:
+            if rep.phrase:
+                st.success(rep.phrase)
+            if rep.avertissement:
+                st.warning(rep.avertissement)
+            if rep.resultat:
+                if "total" in rep.resultat:
+                    st.metric("Total calculé", f"{rep.resultat['total']:,.2f}".replace(",", " "))
+                st.dataframe(rep.resultat["lignes"], width="stretch", hide_index=True)
+                source = f"Outil : {rep.resultat['outil']}\nParamètres : {rep.resultat['parametres']}\nRequête : {rep.resultat['requete']}"
+                st.code(source, language="text")

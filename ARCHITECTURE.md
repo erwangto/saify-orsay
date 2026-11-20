@@ -99,14 +99,14 @@ sequenceDiagram
     UI->>GF: nombres de la phrase présents dans le tableau ?
     GF-->>UI: oui -> phrase + tableau / non -> tableau seul + avertissement
     UI-->>G: réponse, tableau, source
-    Note over LLM,T: max 3 tours, aucun outil d'écriture,<br/>question hors outils -> "je ne sais pas"
+    Note over LLM,T: 2 appels fixes, aucun outil d'écriture,<br/>question hors outils -> "je ne sais pas"
 ```
 
 ## Rôle des fichiers
 
 | Fichier | Type | Rôle |
 |---|---|---|
-| `config.toml` | paramètres | date d'arrêté, chemins, version des règles, modèle, max tours |
+| `config.toml` | paramètres | date d'arrêté, chemins, version des règles, modèle |
 | `reco/loaders.py` | déterministe | lit les 5 fichiers, contrôles, lignes écartées et rejetées |
 | `reco/reconcile.py` | déterministe | agrège, compare, classe QTE / ABS_DEP / ABS_INT / DEP |
 | `reco/report.py` | déterministe | Excel, texte récapitulatif, journal d'audit JSON |

@@ -54,7 +54,7 @@
 - H6 Paramètres (date d'arrêté, chemins, version des règles, taille max de boucle agent, modèle LLM) dans `config.toml`.
 - H7 Lecture de `orsay.db` toujours en SQLite read-only (`mode=ro`), pour le rapprochement (info) comme pour l'assistant.
 - H8 Opération candidate d'un QTE : mouvement `EN_ATTENTE` du même fonds et ISIN dans la base (info seulement).
-- H9 Assistant : modèle Claude récent via l'API fournie (`ANTHROPIC_API_KEY` lu depuis `.env`), boucle bornée à 3 tours. Si la clé est invalide/expirée, l'onglet affiche l'erreur ; les outils restent testés sans LLM.
+- H9 Assistant : modèle Claude récent via l'API fournie (`ANTHROPIC_API_KEY` lu depuis `.env`), 2 appels fixes (routage, synthèse). Si la clé est invalide/expirée, l'onglet affiche l'erreur ; les outils restent testés sans LLM.
 - H10 Python géré avec uv ; `requires-python >= 3.11` (le poste annonce 3.12).
 - H11 Hébergement cible en production : datacenter du client ou SecNumCloud, LLM local ou hébergé SecNumCloud ; l'API Anthropic publique n'est utilisée que pour la démo sur données fictives.
 
@@ -76,6 +76,8 @@
 | Cadrage | ISIN inconnu du référentiel : ABS_DEP conservé + mention « ISIN absent du référentiel » | Info utile, typologie inchangée | Nouveau type de suspens |
 | Cadrage | Streamlit 2 onglets (Rapprochement, Questions), bouton « fichiers d'exemple » | Démo directe | Plusieurs pages / CLI |
 | Cadrage | Agent à outils plutôt que RAG pour le besoin 2 | Données structurées (SQL) et questions de calcul (sommes, valorisation) : un RAG ferait calculer le LLM sur des extraits partiels | RAG (pertinent plus tard pour des documents : prospectus, procédures) |
+| Étape 6 | Workflow à 2 appels fixes (routage puis synthèse, `messages.parse` + pydantic) au lieu d'une boucle d'agent | Le choix d'outil tient en un appel : plus simple, borné par construction, testable avec un LLM simulé | Boucle tool-use bornée à 3 tours |
+| Étape 6 | Modèle `claude-opus-5-5`, effort `low` | Modèle courant recommandé ; tâche simple (routage, une phrase) | Sonnet (choix initial non justifié) |
 | Cadrage | Aucun statut « traité » ni modification : l'outil constate et exporte | Pas d'action engageante, périmètre minimal | Suivi des suspens (en « suite ») |
 
 ## Architecture
@@ -98,7 +100,7 @@ BESOIN 1 - RAPPROCHEMENT
 BESOIN 2 - QUESTIONS DES GÉRANTS
 [H] question en français
         |
-[LLM] choisit un outil + paramètres (boucle bornée, sortie pydantic)
+[LLM] choisit un outil + paramètres (1 appel, sortie pydantic)
         |
 [D] outil : requête SQL figée sur orsay.db (lecture seule) -> tableau + source
         |
@@ -111,12 +113,12 @@ BESOIN 2 - QUESTIONS DES GÉRANTS
 
 | Fichier | Rôle | Test qui le vérifie |
 |---|---|---|
-| `config.toml` | Date d'arrêté, chemins, version des règles, modèle, max tours | utilisé par tous les tests |
+| `config.toml` | Date d'arrêté, chemins, version des règles, modèle | utilisé par tous les tests |
 | `reco/loaders.py` | Lecture et contrôle des 5 fichiers, lignes écartées/rejetées | `tests/test_loaders.py` |
 | `reco/reconcile.py` | Agrégation, comparaison, typage des suspens, enrichissement info | `tests/test_reconcile.py` (les 7 suspens attendus + pièges) |
 | `reco/report.py` | Excel, texte récap, journal d'audit | `tests/test_report.py` |
 | `assistant/tools.py` | Outils SQL lecture seule (encours, échéances, concentration, non dénoués, mouvements d'un titre) | `tests/test_tools.py` |
-| `assistant/agent.py` | Appel LLM, boucle bornée, schémas pydantic, garde-fou nombres | `tests/test_agent.py` (garde-fou et routage avec LLM simulé) |
+| `assistant/agent.py` | Appel LLM, 2 appels fixes, schémas pydantic, garde-fou nombres | `tests/test_agent.py` (garde-fou et routage avec LLM simulé) |
 | `app.py` | Interface Streamlit 2 onglets | vérif manuelle (lancement + démo) |
 
 ## Limites et suite
@@ -124,5 +126,6 @@ BESOIN 2 - QUESTIONS DES GÉRANTS
 - Étape 3 (reconcile) : les 7 suspens attendus sont trouvés par test. Appariement DEP au premier venu si plusieurs conservateurs candidats (cas absent des données). Conservateur bloqué : ses titres ne sont pas rapprochés et ne créent pas de faux ABS_INT ailleurs.
 - Étape 4 (report + onglet Rapprochement) : export Excel/audit/récap testés ; interface vérifiée en navigateur (7 suspens affichés, 0 erreur). Pas de test automatisé de l'interface. Le dépôt de fichiers personnalisés n'a pas été testé dans le navigateur.
 - Étape 5 (outils) : 3 outils sur 5 (concentration émetteur et origine d'un suspens en suite). Montants en float SQL arrondis à 2 décimales (acceptable pour de l'information, pas pour de la comptabilité). Valorisation pied de coupon, sans intérêts courus.
+- Étape 6 (agent) : garde-fou testé avec LLM simulé (nombre inventé rejeté) ; essai réel OK (encours OBL 724836.0, phrase acceptée). Limites : le garde-fou accepte les petits nombres présents dans les dates (ex. 25) ; pas de repli automatique en cas de refus du modèle (erreur affichée) ; l'API publique sert à la démo seulement (H11).
 - pandas retiré : listes + Decimal suffisent (décision d'implémentation).
 - Passage en production : hébergement datacenter client / SecNumCloud, LLM local ; ordonnancement quotidien après réception des relevés ; double exécution (manuel + outil) pendant N jours, bascule quand 0 divergence.
