@@ -121,5 +121,6 @@ BESOIN 2 - QUESTIONS DES GÉRANTS
 
 ## Limites et suite
 - Étape 2 (loaders) : contrôles de date et de compteurs testés sur B ; pas de test de fichier A/C corrompu (structure Excel/XML cassée = exception non gérée).
+- Étape 3 (reconcile) : les 7 suspens attendus sont trouvés par test. Appariement DEP au premier venu si plusieurs conservateurs candidats (cas absent des données). Conservateur bloqué : ses titres ne sont pas rapprochés et ne créent pas de faux ABS_INT ailleurs.
 - pandas retiré : listes + Decimal suffisent (décision d'implémentation).
 - Passage en production : hébergement datacenter client / SecNumCloud, LLM local ; ordonnancement quotidien après réception des relevés ; double exécution (manuel + outil) pendant N jours, bascule quand 0 divergence.
