@@ -75,6 +75,7 @@
 | Cadrage | Assistant basé sur `orsay.db` (positions, cours à la date de config) ; obligations/BTF = nominal x cours / 100, actions = quantité x cours | Le client veut des réponses « tirées de notre base » | Utiliser le CSV du rapprochement |
 | Cadrage | ISIN inconnu du référentiel : ABS_DEP conservé + mention « ISIN absent du référentiel » | Info utile, typologie inchangée | Nouveau type de suspens |
 | Cadrage | Streamlit 2 onglets (Rapprochement, Questions), bouton « fichiers d'exemple » | Démo directe | Plusieurs pages / CLI |
+| Cadrage | Agent à outils plutôt que RAG pour le besoin 2 | Données structurées (SQL) et questions de calcul (sommes, valorisation) : un RAG ferait calculer le LLM sur des extraits partiels | RAG (pertinent plus tard pour des documents : prospectus, procédures) |
 | Cadrage | Aucun statut « traité » ni modification : l'outil constate et exporte | Pas d'action engageante, périmètre minimal | Suivi des suspens (en « suite ») |
 
 ## Architecture
